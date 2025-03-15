@@ -30,3 +30,21 @@ class TypeComponent(Component):
     def __init__(self, char: str):
         assert len(char) == 1
         self.char = char
+
+
+class PowerUpComponent(Component):
+    """Allows the entity to go through walls for a limited number of turns."""
+
+    def __init__(self, max_turns: int = 5):
+        self.max_turns = max_turns
+        self.remaining_turns = 0
+
+    def trigger_power_up(self):
+        self.remaining_turns = self.max_turns
+
+    def use_turn(self) -> bool:
+        if self.remaining_turns > 0:
+            self.remaining_turns -= 1
+            return True
+
+        return False

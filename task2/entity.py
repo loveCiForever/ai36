@@ -13,4 +13,4 @@ class Entity:
         self.components[type(component)] = component
 
     def get_component(self, component_type: Type[Component]) -> Component:
-        return self.components[component_type]
+        return self.components.get(component_type)
