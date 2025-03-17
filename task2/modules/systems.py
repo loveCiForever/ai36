@@ -46,7 +46,9 @@ class TeleportSystem(System):
 
 
 class ConsumeSystem(System):
-    def update(self, entities: list[Entity]):
+    def update(self, entities: list[Entity]) -> int:
+        score = 0
+
         for entity in entities:
             if entity.has_component(ConsumerComponent):
                 position = entity.get_component(PositionComponent).position
@@ -57,5 +59,7 @@ class ConsumeSystem(System):
                 ]
 
                 for consumable in consumables:
-                    print(f"Score {consumable.get_component(ConsumableComponent).points} pts!")
+                    score += consumable.get_component(ConsumableComponent).points
                     entities.remove(consumable)
+        
+        return score

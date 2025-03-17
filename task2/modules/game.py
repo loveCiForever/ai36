@@ -5,7 +5,7 @@ from .components import MoveableComponent, PositionComponent, SpriteComponent, N
 from .systems import MoveAndCollideSystem, TeleportSystem, ConsumeSystem
 
 TILE_SIZE = 16
-WINDOW_WIDTH, WINDOW_HEIGHT = 800, 600
+WINDOW_WIDTH, WINDOW_HEIGHT = 960, 540
 
 
 class Direction(Enum):
@@ -13,6 +13,14 @@ class Direction(Enum):
     DOWN = (0, 1)
     LEFT = (-1, 0)
     RIGHT = (1, 0)
+
+
+keybindings = {
+    pygame.K_w: Direction.UP,
+    pygame.K_s: Direction.DOWN,
+    pygame.K_a: Direction.LEFT,
+    pygame.K_d: Direction.RIGHT
+}
 
 
 class Game:
@@ -23,6 +31,8 @@ class Game:
         self.map_height = map_height
 
         self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
+        self.surface = pygame.Surface((map_width * TILE_SIZE, map_height * TILE_SIZE))
+
         self.clock = pygame.time.Clock()
         self.is_running = True
 
@@ -36,30 +46,62 @@ class Game:
 
         self.delta_time = 0
 
+        self.score = 0
+        self.path_taken = 0
+
     def handle_input(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.is_running = False
 
+            if event.type == pygame.KEYDOWN:
+                player = [entity for entity in self.entities
+                          if entity.get_component(NameComponent).name == "player"][0]
+                direction_component = player.get_component(MoveableComponent)
+
+                if event.key in keybindings.keys():
+                    direction_component.direction = keybindings[event.key].value
+
     def update(self):
-        if self.delta_time >= .5:
+        if self.delta_time >= .2:
             self.move_and_collide_system.update(self.entities)
             self.teleport_system.update(self.entities)
-            self.consume_system.update(self.entities)
+            
+            self.score += self.consume_system.update(self.entities)
 
             self.delta_time = 0
+            self.path_taken += 1
 
     def render(self):
         self.screen.fill(pygame.Color("black"))
+        self.surface.fill(pygame.Color("black"))
 
         for entity in self.entities:
             position = entity.get_component(PositionComponent).position
 
             if entity.has_component(SpriteComponent):
-                self.screen.blit(
-                    entity.get_component(SpriteComponent).sprite,
+                sprite = entity.get_component(SpriteComponent).sprite
+
+                if entity.has_component(MoveableComponent):
+                    direction = entity.get_component(MoveableComponent).direction
+                    sprite = pygame.transform.rotate(
+                        pygame.transform.flip(sprite, direction[0] == 1, False),
+                        90 * direction[1]
+                    )
+                
+                self.surface.blit(sprite,
                     (position.x * TILE_SIZE, position.y * TILE_SIZE)
                 )
+
+        scaled_surface = pygame.transform.scale_by(self.surface,
+            WINDOW_WIDTH / (self.map_width * TILE_SIZE)
+        )
+        self.screen.blit(scaled_surface, (0, WINDOW_HEIGHT - scaled_surface.get_size()[1]))
+
+        font = pygame.font.Font(None, 32)
+        hud_info = f"Score: {self.score}    Path taken: {self.path_taken}"
+        text_surface = font.render(hud_info, True, pygame.Color("white"))
+        self.screen.blit(text_surface, (20, 20))
 
         pygame.display.flip()
 
