@@ -25,8 +25,9 @@ keybindings = {
 
 
 class Game:
-    def __init__(self, width: int, height: int):
+    def __init__(self, title: str, width: int, height: int):
         pygame.init()
+        pygame.display.set_caption(title)
 
         self.width = width
         self.height = height
@@ -139,10 +140,10 @@ class Game:
             self.render()
 
     @classmethod
-    def load_from_map(cls, map_data: str) -> Self:
+    def load_from_map(cls, title: str, map_data: str) -> Self:
         map_data = map_data.split("\n")
 
-        game = cls(len(map_data[0]), len(map_data))
+        game = cls(title, len(map_data[0]), len(map_data))
 
         portals = [
             (1, 1),
