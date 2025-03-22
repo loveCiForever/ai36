@@ -1,5 +1,4 @@
 import pygame
-from .constants import Direction
 
 
 class Comp:
@@ -58,11 +57,8 @@ class GhostComp(Comp):
         self.turns = self.max_turns
 
     def use(self):
-        if self.is_active():
+        if self.turns > 0:
             self.turns -= 1
-            
-    def is_active(self) -> bool:
-        return self.turns > 0
 
 
 class ObstacleComp:

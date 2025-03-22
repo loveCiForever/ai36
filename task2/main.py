@@ -8,9 +8,6 @@ def main():
         map_data = map_file.read()
 
         game = Game.load_from_map(TITLE, map_data)
-
-        print(game.pathfinder.find())
-
         game.run()
 
 

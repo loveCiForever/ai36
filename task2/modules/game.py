@@ -1,4 +1,5 @@
 import pygame
+import time
 from typing import Self
 from .constants import Direction
 from .entities import Entity, EntityCollection
@@ -8,14 +9,6 @@ from .pathfinding import PathfindSystem
 
 TILE_SIZE = 64
 WINDOW_WIDTH, WINDOW_HEIGHT = 1280, 720
-
-
-keybindings = {
-    pygame.K_w: Direction.UP,
-    pygame.K_s: Direction.DOWN,
-    pygame.K_a: Direction.LEFT,
-    pygame.K_d: Direction.RIGHT
-}
 
 
 class Game:
@@ -39,8 +32,8 @@ class Game:
         self.systems = {
             system: (system(), None) for system in [
                 MoveAndTeleportSystem,
-                ConsumeSystem,
-                GhostSystem
+                GhostSystem,
+                ConsumeSystem
             ]
         }
 
@@ -48,26 +41,22 @@ class Game:
 
         self.score = 0
         self.path_taken = 0
-
-        self.is_ghosting = False
+        self.total_path = -1
 
         self.pathfinder: PathfindSystem = None
-        self.path: list[str] = None
+        self.path: list[str] = []
+
+        self.pathfind_time = -1.0
+        self.pathfind_duration = 0.0
 
     def handle_input(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.is_running = False
-
-            # if event.type == pygame.KEYDOWN:
-            #     direction = self.get_player().get(DirectionComp)
-
-            #     if event.key in keybindings.keys():
-            #         direction.dx, direction.dy = keybindings[event.key].value
-
+    
     def update(self):
-        if self.delta_time >= .2 and not self.is_losing():
-            if self.path_taken < len(self.path):
+        if self.path_taken < self.total_path:
+            if self.delta_time >= .1:
                 direction = self.get_player().get(DirectionComp)
                 direction.dx, direction.dy = Direction[self.path[self.path_taken]].value
 
@@ -75,10 +64,17 @@ class Game:
                     self.systems[system_type] = system, system.update(self)
 
                 self.score += self.systems[ConsumeSystem][1]
-                self.is_ghosting = self.systems[GhostSystem][1]
                 
                 self.delta_time = 0
                 self.path_taken += 1
+        else:
+            self.pathfind_time = time.time()
+
+            self.path.extend(self.pathfinder.find())
+            self.total_path = len(self.path)
+
+            if not self.is_winning():
+                self.pathfind_duration = time.time() - self.pathfind_time
 
     def get_player(self) -> Entity:
         return self.entities.get_by_name("player")[0]
@@ -102,6 +98,8 @@ class Game:
         self.screen.fill(pygame.Color("black"))
         self.surface.fill(pygame.Color("steelblue"))
 
+        ghost_turns = self.get_player().get(GhostComp).turns
+
         for entity in self.entities.get_all():
             pos = entity.get(PosComp)
             sprite = entity.get(SpriteComp).sprite
@@ -116,7 +114,7 @@ class Game:
             if entity.has(ObstacleComp):
                 sprite.set_alpha(
                     128 if entity.get(ObstacleComp).ghostable
-                        and self.is_ghosting
+                        and ghost_turns > 0
                     else 255
                 )
             
@@ -128,10 +126,18 @@ class Game:
 
         self.screen.blit(scaled_surface, (0, WINDOW_HEIGHT - scaled_surface.get_size()[1]))
 
-        font = pygame.font.Font(None, 32)
-        hud_info = f"Score: {self.score}    Path taken: {self.path_taken}    {"POWER UP!" if self.is_ghosting else ""}"
+        font = pygame.font.SysFont("monospace", 24, bold=True)
+        hud_info = " | ".join(filter(None, [
+            f"Score: {self.score}",
+            f"Path taken: {self.path_taken}",
+            f"Pathfinding time: {self.pathfind_duration:.2f}s",
+            f"POWER UP ({ghost_turns})!" if ghost_turns > 0 else None
+        ]))
         text_surface = font.render(hud_info, True, pygame.Color("white"))
-        self.screen.blit(text_surface, (20, (WINDOW_HEIGHT - scaled_surface.get_size()[1] - text_surface.get_size()[1]) / 2))
+        self.screen.blit(text_surface, (
+            (WINDOW_WIDTH - text_surface.get_size()[0]) / 2,
+            (WINDOW_HEIGHT - scaled_surface.get_size()[1] - text_surface.get_size()[1]) / 2
+        ))
 
         pygame.display.flip()
 
@@ -207,6 +213,5 @@ class Game:
         game.entities._sort()
 
         game.pathfinder = PathfindSystem(game)
-        game.path = game.pathfinder.find()
 
         return game

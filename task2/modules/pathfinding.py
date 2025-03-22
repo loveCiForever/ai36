@@ -1,8 +1,5 @@
 import heapq
-from typing import Optional
-from pygame.math import Vector2
 from .constants import Direction
-from .entities import Entity
 from .components import *
 from .systems import MoveAndTeleportSystem
 

@@ -1,6 +1,4 @@
-from .constants import Direction
 from .components import *
-from .entities import Entity
 
 
 class System:
@@ -41,7 +39,7 @@ class MoveAndTeleportSystem(System):
 
             pos.x, pos.y = self.get_next_pos(game,
                 pos.x, pos.y, direction.dx, direction.dy,
-                entity.has(GhostComp) and entity.get(GhostComp).is_active()
+                entity.has(GhostComp) and entity.get(GhostComp).turns > 0
             )
 
 
@@ -67,12 +65,7 @@ class ConsumeSystem(System):
     
 
 class GhostSystem(System):
-    def update(self, game) -> bool:
+    def update(self, game):
         for entity in game.entities.get_by_comp(GhostComp):
             ghost_comp = entity.get(GhostComp)
-
             ghost_comp.use()
-
-            return ghost_comp.is_active()
-            
-        return False
