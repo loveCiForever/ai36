@@ -1,4 +1,5 @@
 import pygame
+from .constants import Direction
 
 
 class Comp:
@@ -19,20 +20,20 @@ class SpriteComp(Comp):
 
 class PosComp(Comp):
     def __init__(self, x: int = 0, y: int = 0):
-        self.pos = pygame.math.Vector2(x, y)
+        self.x = x
+        self.y = y
 
 
-class MoveableComp(Comp):
-    def __init__(self, dx: int = 0, dy: int = 0):
-        self.direction = pygame.math.Vector2(dx, dy)
-
-    def move(self, pos: pygame.math.Vector2) -> pygame.math.Vector2:
-        return pos + self.direction
+class DirectionComp(Comp):
+    def __init__(self, dx: int, dy: int):
+        self.dx = dx
+        self.dy = dy
 
 
 class TeleportableComp(Comp):
-    def __init__(self, teleport_pos: tuple[int, int]):
-        self.teleport_pos = pygame.math.Vector2(teleport_pos)
+    def __init__(self, tx: int, ty: int):
+        self.tx = tx
+        self.ty = ty
 
 
 class ConsumerComp(Comp):

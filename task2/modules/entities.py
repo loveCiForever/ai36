@@ -28,11 +28,11 @@ class EntityCollection:
     def __init__(self, entities: list[Entity] = None):
         self.entities = entities or []
 
-    def add(self, name: str, pos: tuple[int, int], comps: list[Comp]) -> Entity:
+    def add(self, name: str, x: int, y: int, comps: list[Comp]) -> Entity:
         entity = Entity()
 
         entity.add(NameComp(name))
-        entity.add(PosComp(*pos))
+        entity.add(PosComp(x, y))
 
         for comp in comps:
             entity.add(comp)
@@ -52,12 +52,19 @@ class EntityCollection:
                 if entity.has(comp_type)]
 
     def get_by_name(self, name: str) -> list[Entity]:
-        return [entity for entity in self.get_by_comp(NameComp)
+        return [entity for entity in self.entities
                 if entity.get(NameComp).name == name]
     
-    def get_by_pos(self, x: int, y: int) -> list[Entity]:
-        return [entity for entity in self.get_by_comp(PosComp)
-                if tuple(entity.get(PosComp).pos) == (x, y)]
+    def get_at(self, x: int, y: int) -> list[Entity]:
+        entities = []
+
+        for entity in self.entities:
+            pos = entity.get(PosComp)
+
+            if (pos.x, pos.y) == (x, y):
+                entities.append(entity)
+
+        return entities
     
     def _sort(self):
         self.entities.sort(key=lambda entity: self._SORT_ORDERS[entity.get(NameComp).name])

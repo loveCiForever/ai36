@@ -1,4 +1,6 @@
+from .constants import Direction
 from .components import *
+from .entities import Entity
 
 
 class System:
@@ -6,39 +8,41 @@ class System:
         ...
 
 
-class MoveAndCollideSystem(System):
-    """Not to be confused with Godot's move_and_collide() :P"""
-    def update(self, game):
-        for entity in game.entities.get_by_comp(MoveableComp):
-            pos_comp = entity.get(PosComp)
-            direction_comp = entity.get(MoveableComp)
+class MoveAndTeleportSystem(System):
+    @classmethod
+    def get_next_pos(cls, game, x: int, y: int, dx: int, dy: int, is_ghosting: bool) -> tuple[int, int]:        
+        new_x = x + dx
+        new_y = y + dy
 
-            new_pos = direction_comp.move(pos_comp.pos)
+        for other_entity in game.entities.get_by_comp(ObstacleComp):
+            other_pos = other_entity.get(PosComp)
 
-            if not any(
-                other_entity for other_entity in game.entities.get_by_comp(ObstacleComp)
-                if other_entity.get(PosComp).pos == new_pos
-                   and (
-                       not other_entity.get(ObstacleComp).ghostable
-                       or (
-                           entity.has(GhostComp)
-                           and not entity.get(GhostComp).is_active()
-                       )
-                   )
+            if (other_pos.x, other_pos.y) == (new_x, new_y) and (
+                not other_entity.get(ObstacleComp).ghostable
+                or not is_ghosting
             ):
-                pos_comp.pos = new_pos
+                return x, y
 
+        for portal in game.entities.get_by_comp(TeleportableComp):
+            portal_pos = portal.get(PosComp)
 
-class TeleportSystem(System):
+            if (portal_pos.x, portal_pos.y) == (new_x, new_y):
+                teleport = portal.get(TeleportableComp)
+                new_x = teleport.tx
+                new_y = teleport.ty
+                break
+
+        return new_x, new_y
+
     def update(self, game):
-        for entity in game.entities.get_by_comp(MoveableComp):
+        for entity in game.entities.get_by_comp(DirectionComp):
+            pos = entity.get(PosComp)
+            direction = entity.get(DirectionComp)
 
-            pos_comp = entity.get(PosComp)
-            portal = [entity for entity in game.entities.get_by_comp(TeleportableComp)
-                      if entity.get(PosComp).pos == pos_comp.pos]
-            
-            if any(portal):
-                pos_comp.pos = portal[0].get(TeleportableComp).teleport_pos
+            pos.x, pos.y = self.get_next_pos(game,
+                pos.x, pos.y, direction.dx, direction.dy,
+                entity.has(GhostComp) and entity.get(GhostComp).is_active()
+            )
 
 
 class ConsumeSystem(System):
@@ -46,17 +50,18 @@ class ConsumeSystem(System):
         score = 0
 
         for entity in game.entities.get_by_comp(ConsumerComp):
-            pos = entity.get(PosComp).pos
-            consumables = [entity for entity in game.entities.get_by_comp(ConsumableComp)
-                           if entity.get(PosComp).pos == pos]
+            player_pos = entity.get(PosComp)
 
-            for consumable in consumables:
-                score += consumable.get(ConsumableComp).points
+            for consumable in game.entities.get_by_comp(ConsumableComp):
+                consumable_pos = consumable.get(PosComp)
 
-                if consumable.has(PowerUpComp) and entity.has(GhostComp):
-                    entity.get(GhostComp).activate()
+                if (consumable_pos.x, consumable_pos.y) == (player_pos.x, player_pos.y):
+                    score += consumable.get(ConsumableComp).points
 
-                game.entities.remove(consumable)
+                    if consumable.has(PowerUpComp) and entity.has(GhostComp):
+                        entity.get(GhostComp).activate()
+
+                    game.entities.remove(consumable)
         
         return score
     

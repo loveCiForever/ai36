@@ -1,19 +1,13 @@
 import pygame
 from typing import Self
-from enum import Enum
+from .constants import Direction
 from .entities import Entity, EntityCollection
 from .components import *
 from .systems import *
+from .pathfinding import PathfindSystem
 
 TILE_SIZE = 64
 WINDOW_WIDTH, WINDOW_HEIGHT = 1280, 720
-
-
-class Direction(Enum):
-    UP = (0, -1)
-    DOWN = (0, 1)
-    LEFT = (-1, 0)
-    RIGHT = (1, 0)
 
 
 keybindings = {
@@ -44,8 +38,7 @@ class Game:
 
         self.systems = {
             system: (system(), None) for system in [
-                MoveAndCollideSystem,
-                TeleportSystem,
+                MoveAndTeleportSystem,
                 ConsumeSystem,
                 GhostSystem
             ]
@@ -58,29 +51,34 @@ class Game:
 
         self.is_ghosting = False
 
+        self.pathfinder: PathfindSystem = None
+        self.path: list[str] = None
+
     def handle_input(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.is_running = False
 
-            if event.type == pygame.KEYDOWN:
-                player = [entity for entity in self.entities.get_all()
-                          if entity.get(NameComp).name == "player"][0]
-                direction_component = player.get(MoveableComp)
+            # if event.type == pygame.KEYDOWN:
+            #     direction = self.get_player().get(DirectionComp)
 
-                if event.key in keybindings.keys():
-                    direction_component.direction = keybindings[event.key].value
+            #     if event.key in keybindings.keys():
+            #         direction.dx, direction.dy = keybindings[event.key].value
 
     def update(self):
         if self.delta_time >= .2 and not self.is_losing():
-            for system_type, (system, _) in self.systems.items():
-                self.systems[system_type] = system, system.update(self)
+            if self.path_taken < len(self.path):
+                direction = self.get_player().get(DirectionComp)
+                direction.dx, direction.dy = Direction[self.path[self.path_taken]].value
 
-            self.score += self.systems[ConsumeSystem][1]
-            self.is_ghosting = self.systems[GhostSystem][1]
-            
-            self.delta_time = 0
-            self.path_taken += 1
+                for system_type, (system, _) in self.systems.items():
+                    self.systems[system_type] = system, system.update(self)
+
+                self.score += self.systems[ConsumeSystem][1]
+                self.is_ghosting = self.systems[GhostSystem][1]
+                
+                self.delta_time = 0
+                self.path_taken += 1
 
     def get_player(self) -> Entity:
         return self.entities.get_by_name("player")[0]
@@ -89,25 +87,30 @@ class Game:
         return not any(self.entities.get_by_comp(ConsumableComp))
     
     def is_losing(self) -> bool:
-        player_pos = self.get_player().get(PosComp).pos
-        return not self.is_ghosting and any(
-            entity for entity in self.entities.get_by_comp(ObstacleComp)
-            if entity.get(PosComp).pos == player_pos
-        )
+        player_pos = self.get_player().get(PosComp)
+
+        if not self.is_ghosting:
+            for obstacle in self.entities.get_by_comp(ObstacleComp):
+                obstacle_pos = obstacle.get(PosComp)
+
+                if (obstacle_pos.x, obstacle_pos.y) == (player_pos.x, player_pos.y):
+                    return True
+                
+        return False
 
     def render(self):
         self.screen.fill(pygame.Color("black"))
         self.surface.fill(pygame.Color("steelblue"))
 
         for entity in self.entities.get_all():
-            pos = entity.get(PosComp).pos
+            pos = entity.get(PosComp)
             sprite = entity.get(SpriteComp).sprite
 
-            if entity.has(MoveableComp):
-                direction = entity.get(MoveableComp).direction
+            if entity.has(DirectionComp):
+                direction = entity.get(DirectionComp)
                 sprite = pygame.transform.rotate(
-                    pygame.transform.flip(sprite, direction[0] == 1, False),
-                    90 * direction[1]
+                    pygame.transform.flip(sprite, direction.dx == 1, False),
+                    90 * direction.dy
                 )
 
             if entity.has(ObstacleComp):
@@ -153,9 +156,9 @@ class Game:
         ]
 
         for i, pos in enumerate(portals):
-            game.entities.add("portal", pos, [
+            game.entities.add("portal", *pos, [
                 SpriteComp(game.texture_atlas, 1, 0, TILE_SIZE),
-                TeleportableComp(portals[(i + 2) % 4])
+                TeleportableComp(*portals[(i + 2) % 4])
             ])
 
         for y, row in enumerate(map_data):
@@ -178,7 +181,7 @@ class Game:
                             name = "player"
                             sprite_pos = 2, 0
                             comps = [
-                                MoveableComp(Direction.LEFT.value),
+                                DirectionComp(*Direction.LEFT.value),
                                 GhostComp(5),
                                 ConsumerComp()
                             ]
@@ -196,11 +199,14 @@ class Game:
                                 PowerUpComp()
                             ]
 
-                    game.entities.add(name, (x, y), [
+                    game.entities.add(name, x, y, [
                         SpriteComp(game.texture_atlas, *sprite_pos, TILE_SIZE),
                         *comps
                     ])
 
         game.entities._sort()
+
+        game.pathfinder = PathfindSystem(game)
+        game.path = game.pathfinder.find()
 
         return game
