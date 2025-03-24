@@ -1,4 +1,5 @@
 from typing import Optional, Type
+from .constants import euclidean_dst
 from .components import *
 
 
@@ -63,6 +64,19 @@ class EntityCollection:
 
             if (pos.x, pos.y) == (x, y):
                 entities.append(entity)
+
+        return entities
+    
+    def get_around(self, source: Entity, r: int) -> list[Entity]:
+        entities = []
+        source_pos = source.get(PosComp)
+
+        for target in self.entities:
+            target_pos = target.get(PosComp)
+            dst = euclidean_dst(source_pos.x, source_pos.y, target.x, target_pos.y)
+
+            if dst <= r:
+                entities.append(target)
 
         return entities
     

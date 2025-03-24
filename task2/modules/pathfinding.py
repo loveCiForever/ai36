@@ -1,15 +1,7 @@
 import heapq
-from .constants import Direction
+from .constants import Direction, manhattan_dst
 from .components import *
 from .systems import MoveAndTeleportSystem
-
-
-def manhattan_dst(x1: int, y1: int, x2: int, y2: int) -> int:
-    return int(abs(x1 - x2) + abs(y1 - y2))
-
-
-def euclidean_dst(x1: int, y1: int, x2: int, y2: int) -> float:
-    return ((x1 - x2) ** 2 + (y1 - y2) ** 2) ** .5
 
 
 class PathfindSystem:
@@ -22,7 +14,10 @@ class PathfindSystem:
         for direction in Direction:
             dx, dy = direction.value
             new_x, new_y = MoveAndTeleportSystem.get_next_pos(
-                self.game, x, y, dx, dy, False
+                self.game, x, y, dx, dy, any(
+                    entity for entity in self.game.entities.get_at(x, y)
+                    if entity.has(GhostComp) and entity.get(GhostComp).turns > 0
+                )
             )
 
             if (new_x, new_y) != (x, y):
@@ -34,7 +29,11 @@ class PathfindSystem:
         player = self.game.get_player()
         player_pos = player.get(PosComp)
 
-        frontier = [(0, (player_pos.x, player_pos.y), [])]
+        frontier = [(
+            self.estimate(player_pos.x, player_pos.y),
+            (player_pos.x, player_pos.y),
+            []
+        )]
         visited = set()
 
         while frontier:
@@ -50,18 +49,13 @@ class PathfindSystem:
                 
             for direction, (new_x, new_y) in self.get_moves(x, y):
                 if (new_x, new_y) not in visited:
-                    heapq.heappush(frontier, (cost + 1, (new_x, new_y), path + [direction.name]))
+                    heapq.heappush(frontier, (
+                        cost + self.estimate(new_x, new_y) + 1,
+                        (new_x, new_y),
+                        path + [direction.name]
+                    ))
 
         return []
 
-    # def estimate(self):
-    #     player_pos = self.player.get(PosComp).pos
-    #     est_fruit: tuple[float, Entity] = (float("inf"), None)
-
-    #     for fruit in self.game.entities.get_by_comp(ConsumableComp):
-    #         dst = manhattan_dst(fruit.get(PosComp).pos, player_pos)
-
-    #         if dst < est_fruit[0]:
-    #             est_fruit = (dst, fruit)
-
-    #     return est_fruit
+    def estimate(self, x: int, y: int) -> float:
+        return 0  # Full UCS pathfinding

@@ -74,7 +74,7 @@ class Game:
             self.total_path = len(self.path)
 
             if not self.is_winning():
-                self.pathfind_duration = time.time() - self.pathfind_time
+                self.pathfind_duration += time.time() - self.pathfind_time
 
     def get_player(self) -> Entity:
         return self.entities.get_by_name("player")[0]
