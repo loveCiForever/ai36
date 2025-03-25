@@ -17,9 +17,9 @@ import numpy as np
 """
 
 BOARD_SIZE = 16
-POPULATION_SIZE = 100
+POPULATION_SIZE = 1000
 MUTATION_RATE = 0.1
-MAX_GENERATION = 100000
+MAX_GENERATION = 10000
 
 """# ChessBoard class (Visualize the Chess board in 2D array)"""
 
