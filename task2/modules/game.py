@@ -1,7 +1,8 @@
 import pygame
+from pygame.locals import *
 import time
 from typing import Self
-from .constants import Direction
+from .common import Direction
 from .entities import Entity, EntityCollection
 from .components import *
 from .systems import *
@@ -24,6 +25,7 @@ class Game:
 
         self.clock = pygame.time.Clock()
         self.is_running = True
+        self.is_paused = True
 
         self.texture_atlas = pygame.image.load("assets/texture_atlas.png").convert_alpha()
 
@@ -49,10 +51,17 @@ class Game:
         self.pathfind_time = -1.0
         self.pathfind_duration = 0.0
 
+        self.banner_text = "Press [SPACE] to start!"
+        self.banner_visible = True
+
     def handle_input(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.is_running = False
+
+            if event.type == pygame.KEYDOWN and event.key == K_SPACE and not self.is_winning():
+                self.is_paused = False
+                self.banner_visible = False
     
     def update(self):
         if self.path_taken < self.total_path:
@@ -67,14 +76,17 @@ class Game:
                 
                 self.delta_time = 0
                 self.path_taken += 1
+        elif self.is_winning():
+            self.is_paused = True
+            self.banner_visible = True
+            self.banner_text = "All treasures found!"
         else:
             self.pathfind_time = time.time()
 
             self.path.extend(self.pathfinder.find())
             self.total_path = len(self.path)
 
-            if not self.is_winning():
-                self.pathfind_duration += time.time() - self.pathfind_time
+            self.pathfind_duration += time.time() - self.pathfind_time
 
     def get_player(self) -> Entity:
         return self.entities.get_by_name("player")[0]
@@ -126,26 +138,45 @@ class Game:
 
         self.screen.blit(scaled_surface, (0, WINDOW_HEIGHT - scaled_surface.get_size()[1]))
 
-        font = pygame.font.SysFont("monospace", 24, bold=True)
+        hud_font = pygame.font.SysFont("monospace", 24, bold=True)
         hud_info = " | ".join(filter(None, [
             f"Score: {self.score}",
             f"Path taken: {self.path_taken}",
             f"Pathfinding time: {self.pathfind_duration:.2f}s",
             f"POWER UP ({ghost_turns})!" if ghost_turns > 0 else None
         ]))
-        text_surface = font.render(hud_info, True, pygame.Color("white"))
-        self.screen.blit(text_surface, (
-            (WINDOW_WIDTH - text_surface.get_size()[0]) / 2,
-            (WINDOW_HEIGHT - scaled_surface.get_size()[1] - text_surface.get_size()[1]) / 2
+
+        hud = hud_font.render(hud_info, True, pygame.Color("white"))
+
+        self.screen.blit(hud, (
+            (WINDOW_WIDTH - hud.get_size()[0]) / 2,
+            (WINDOW_HEIGHT - scaled_surface.get_size()[1] - hud.get_size()[1]) / 2
         ))
+
+        if self.banner_visible:
+            banner_font = pygame.font.SysFont("monospace", 48, bold=True)
+            banner = banner_font.render(self.banner_text, True, pygame.Color("white"))
+
+            banner_surface = pygame.Surface(banner.get_size(), pygame.SRCALPHA)
+            banner_surface.fill((0, 0, 0, 128))
+            banner_surface.blit(banner, (0, 0))
+            
+            self.screen.blit(banner_surface, (
+                (WINDOW_WIDTH - banner_surface.get_size()[0]) / 2,
+                250
+            ))
 
         pygame.display.flip()
 
     def run(self):
         while self.is_running:
             self.delta_time += self.clock.tick(60) / 1000
+
             self.handle_input()
-            self.update()
+
+            if not self.is_paused:
+                self.update()
+            
             self.render()
 
     @classmethod

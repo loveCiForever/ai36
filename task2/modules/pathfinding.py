@@ -1,6 +1,6 @@
 import heapq
 from collections import deque
-from .constants import Direction, manhattan_dst, euclidean_dst
+from .common import Direction, manhattan_dst
 from .components import *
 from .systems import MoveAndTeleportSystem
 
@@ -25,9 +25,6 @@ class PathfindSystem:
                 moves.append((direction, (new_x, new_y)))
 
         return moves
-
-    def precompute(self):
-        ...
 
     def find(self) -> list[str]:
         player = self.game.get_player()
@@ -64,10 +61,13 @@ class PathfindSystem:
         return []
 
     def estimate(self, x: int, y: int) -> float:
-        dsts = []
+        best_est = float("inf")
 
         for consumable in self.game.entities.get_by_comp(ConsumableComp):
             consumable_pos = consumable.get(PosComp)
-            dsts.append(euclidean_dst(x, y, consumable_pos.x, consumable_pos.y))
+            dst = manhattan_dst(x, y, consumable_pos.x, consumable_pos.y)
 
-        return min(dsts) if any(dsts) else 0
+            if dst < best_est:
+                best_est = dst
+
+        return best_est

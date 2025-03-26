@@ -1,5 +1,5 @@
 from typing import Optional, Type
-from .constants import euclidean_dst
+from .common import euclidean_dst
 from .components import *
 
 
