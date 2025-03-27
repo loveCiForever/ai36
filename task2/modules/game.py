@@ -6,7 +6,7 @@ from .common import Direction
 from .entities import Entity, EntityCollection
 from .components import *
 from .systems import *
-from .pathfinding import PathfindSystem
+from .pathfinding import Pathfinder
 
 TILE_SIZE = 64
 WINDOW_WIDTH, WINDOW_HEIGHT = 1280, 720
@@ -31,25 +31,15 @@ class Game:
 
         self.entities = EntityCollection()
 
-        self.systems = {
-            system: (system(), None) for system in [
-                MoveAndTeleportSystem,
-                GhostSystem,
-                ConsumeSystem
-            ]
-        }
+        self.move_and_teleport_system = MoveAndTeleportSystem(self)
+        self.consume_system = ConsumeSystem(self)
 
         self.delta_time = 0
 
         self.score = 0
         self.path_taken = 0
-        self.total_path = -1
 
-        self.pathfinder: PathfindSystem = None
-        self.path: list[str] = []
-
-        self.pathfind_time = -1.0
-        self.pathfind_duration = 0.0
+        self.path: list[str] = None
 
         self.banner_text = "Press [SPACE] to start!"
         self.banner_visible = True
@@ -61,38 +51,29 @@ class Game:
 
             if event.type == pygame.KEYDOWN and event.key == K_SPACE and not self.is_winning():
                 self.is_paused = False
-                self.banner_visible = False
+                self.hide_banner()
     
     def update(self):
-        if self.path_taken < self.total_path:
+        if self.path_taken < len(self.path):
             if self.delta_time >= .1:
                 direction = self.get_player().get(DirectionComp)
                 direction.dx, direction.dy = Direction[self.path[self.path_taken]].value
 
-                for system_type, (system, _) in self.systems.items():
-                    self.systems[system_type] = system, system.update(self)
-
-                self.score += self.systems[ConsumeSystem][1]
+                self.move_and_teleport_system.update()
+                self.score += self.consume_system.update()
                 
                 self.delta_time = 0
                 self.path_taken += 1
-        elif self.is_winning():
+        
+        if self.is_winning():
             self.is_paused = True
-            self.banner_visible = True
-            self.banner_text = "All treasures found!"
-        else:
-            self.pathfind_time = time.time()
-
-            self.path.extend(self.pathfinder.find())
-            self.total_path = len(self.path)
-
-            self.pathfind_duration += time.time() - self.pathfind_time
+            self.show_banner("All pearls found!")
 
     def get_player(self) -> Entity:
         return self.entities.get_by_name("player")[0]
 
     def is_winning(self) -> bool:
-        return not any(self.entities.get_by_comp(ConsumableComp))
+        return not any(self.entities.get_by_name("pearl"))
     
     def is_losing(self) -> bool:
         player_pos = self.get_player().get(PosComp)
@@ -142,7 +123,6 @@ class Game:
         hud_info = " | ".join(filter(None, [
             f"Score: {self.score}",
             f"Path taken: {self.path_taken}",
-            f"Pathfinding time: {self.pathfind_duration:.2f}s",
             f"POWER UP ({ghost_turns})!" if ghost_turns > 0 else None
         ]))
 
@@ -168,7 +148,18 @@ class Game:
 
         pygame.display.flip()
 
-    def run(self):
+    def show_banner(self, text: str = None):
+        if text is not None:
+            self.banner_text = text
+
+        self.banner_visible = True
+
+    def hide_banner(self):
+        self.banner_visible = False
+
+    def run(self, path: list[str]):
+        self.path = path
+
         while self.is_running:
             self.delta_time += self.clock.tick(60) / 1000
 
@@ -224,12 +215,12 @@ class Game:
                             ]
 
                         case ".":
-                            name = "fruit"
+                            name = "pearl"
                             sprite_pos = 0, 1
                             comps = [ConsumableComp(10)]
 
                         case "O":
-                            name = "magical_pie"
+                            name = "gem"
                             sprite_pos = 1, 1
                             comps = [
                                 ConsumableComp(100),
@@ -243,6 +234,6 @@ class Game:
 
         game.entities._sort()
 
-        game.pathfinder = PathfindSystem(game)
+        game.pathfinder = Pathfinder(game)
 
         return game
