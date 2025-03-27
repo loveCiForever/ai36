@@ -1,73 +1,80 @@
 import heapq
-from collections import deque
 from .common import Direction, manhattan_dst
 from .components import *
 from .systems import MoveAndTeleportSystem
 
 
-class PathfindSystem:
+class Pathfinder:
     def __init__(self, game):
         self.game = game
 
-    def get_moves(self, x: int, y: int) -> list[Direction, tuple[int, int]]:
-        moves: list[Direction, tuple[int, int]] = []
+    def get_moves(self, x: int, y: int, ghost_turns: int) -> list[Direction, tuple[int, int], int]:
+        moves: list[Direction, tuple[int, int], int] = []
 
         for direction in Direction:
             dx, dy = direction.value
-            new_x, new_y = MoveAndTeleportSystem.get_next_pos(
-                self.game, x, y, dx, dy, any(
-                    entity for entity in self.game.entities.get_at(x, y)
-                    if entity.has(GhostComp) and entity.get(GhostComp).turns > 0
-                )
+            new_x, new_y, ghost_turns = MoveAndTeleportSystem.get_next_pos(
+                self.game, x, y, dx, dy, ghost_turns, self.game.get_player().get(GhostComp).max_turns
             )
 
             if (new_x, new_y) != (x, y):
-                moves.append((direction, (new_x, new_y)))
+                moves.append((direction, (new_x, new_y), ghost_turns))
 
         return moves
-
+    
     def find(self) -> list[str]:
         player = self.game.get_player()
         player_pos = player.get(PosComp)
 
+        x, y = player_pos.x, player_pos.y
+        pearls = [
+            (pearl.get(PosComp).x, pearl.get(PosComp).y)
+            for pearl in self.game.entities.get_by_name("fruit")
+        ]
+        full_path = []
+
+        while pearls:
+            path, x, y, pearls = self._find(x, y, pearls)
+            full_path.extend(path)
+
+        return full_path
+
+    def _find(self, x: int, y: int, pearls: list[tuple[int, int]]) -> list[str]:
         frontier = [(
-            self.estimate(player_pos.x, player_pos.y),
+            self.estimate(x, y, pearls),
             0,
-            (player_pos.x, player_pos.y),
+            (x, y),
+            0,
             []
         )]
         visited = set()
 
         while frontier:
-            f_cost, g_cost, (x, y), path = heapq.heappop(frontier)
+            f_cost, g_cost, (x, y), ghost_turns, path = heapq.heappop(frontier)
 
             if (x, y) in visited:
                 continue
             visited.add((x, y))
 
-            for entity in self.game.entities.get_at(x, y):
-                if entity.has(ConsumableComp):
-                    return path
+            if (x, y) in pearls:
+                return path, x, y, [pearl for pearl in pearls if pearl != (x, y)]
                 
-            for direction, (new_x, new_y) in self.get_moves(x, y):
-                if (new_x, new_y) not in visited:
-                    heapq.heappush(frontier, (
-                        g_cost + self.estimate(new_x, new_y) + 1,
-                        g_cost + 1,
-                        (new_x, new_y),
-                        path + [direction.name]
-                    ))
+            for direction, (new_x, new_y), new_ghost_turn in self.get_moves(x, y, ghost_turns):
+                if (new_x, new_y) in visited:
+                    continue
+            
+                heapq.heappush(frontier, (
+                    g_cost + self.estimate(new_x, new_y, pearls) + 1,
+                    g_cost + 1,
+                    (new_x, new_y),
+                    new_ghost_turn,
+                    path + [direction.name]
+                ))
 
-        return []
+        return [], x, y, pearls
 
-    def estimate(self, x: int, y: int) -> float:
-        best_est = float("inf")
-
-        for consumable in self.game.entities.get_by_comp(ConsumableComp):
-            consumable_pos = consumable.get(PosComp)
-            dst = manhattan_dst(x, y, consumable_pos.x, consumable_pos.y)
-
-            if dst < best_est:
-                best_est = dst
-
-        return best_est
+    def estimate(self, x: int, y: int, pearls: list[tuple[int, int]]) -> float:
+        if not pearls:
+            return 0
+        
+        return min(manhattan_dst(x, y, *pearl) for pearl in pearls)

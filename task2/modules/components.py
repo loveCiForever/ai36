@@ -53,13 +53,6 @@ class GhostComp(Comp):
         self.max_turns = max_turns
         self.turns = 0
 
-    def activate(self):
-        self.turns = self.max_turns
-
-    def use(self):
-        if self.turns > 0:
-            self.turns -= 1
-
 
 class ObstacleComp:
     def __init__(self, ghostable: bool=False):
