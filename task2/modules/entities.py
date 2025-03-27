@@ -21,8 +21,8 @@ class EntityCollection:
     _SORT_ORDERS = {
         "portal": 0,
         "wall": 1,
-        "fruit": 2,
-        "magical_pie": 3,
+        "pearl": 2,
+        "gem": 3,
         "player": 4
     }
 

@@ -73,7 +73,7 @@ class Game:
         return self.entities.get_by_name("player")[0]
 
     def is_winning(self) -> bool:
-        return not any(self.entities.get_by_name("fruit"))
+        return not any(self.entities.get_by_name("pearl"))
     
     def is_losing(self) -> bool:
         player_pos = self.get_player().get(PosComp)
@@ -215,12 +215,12 @@ class Game:
                             ]
 
                         case ".":
-                            name = "fruit"
+                            name = "pearl"
                             sprite_pos = 0, 1
                             comps = [ConsumableComp(10)]
 
                         case "O":
-                            name = "magical_pie"
+                            name = "gem"
                             sprite_pos = 1, 1
                             comps = [
                                 ConsumableComp(100),

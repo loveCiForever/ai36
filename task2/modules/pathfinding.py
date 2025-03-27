@@ -29,7 +29,7 @@ class Pathfinder:
         x, y = player_pos.x, player_pos.y
         pearls = [
             (pearl.get(PosComp).x, pearl.get(PosComp).y)
-            for pearl in self.game.entities.get_by_name("fruit")
+            for pearl in self.game.entities.get_by_name("pearl")
         ]
         full_path = []
 
