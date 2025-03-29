@@ -1,15 +1,10 @@
 import time
-from itertools import groupby
-from modules import Game, Pathfinder
-
-TITLE = "Wilbur's Wavy Waters"
+from modules import Game, Pathfinder, Renderer
 
 
 def main():
-    with open("input.txt") as map_file:
-        map_data = map_file.read()
-        game = Game.load_from_map(TITLE, map_data)
-
+    with open("input.txt", "r") as map_file:
+        game = Game.load_map(map_file.read())
         pathfinder = Pathfinder(game)
 
         print("\nComputing path, please wait...")
@@ -19,21 +14,13 @@ def main():
         pathfind_duration = time.time() - pathfind_time
 
         print(
-            f"\n{"Pathfinding complete!":^80}\n{"=" * 80}",
+            f"\n{"Pathfinding complete!":^25}\n{"=" * 25}",
             f"\nPathfind duration: {pathfind_duration:.2f}s",
-            f"\nPath: {" ".join(f"{len(list(group))}{direction[0]}" for direction, group in groupby(path))}"
+            f"\nTotal cost: {len(path)}"
         )
 
-        with open("output.txt", "w+") as output_file:
-            output_file.writelines([
-                "Step | Direction\n",
-                "-----|----------\n",
-                *[f" {i + 1:<3} |  {direction:<8}\n" for i, direction in enumerate(path)]
-            ])
-
-            print("\nPath has been written to \"output.txt\".")
-
-        game.run(path)
+        renderer = Renderer(game, "pygame window", 1280, 720)
+        renderer.run(path)
 
 
 if __name__ == "__main__":

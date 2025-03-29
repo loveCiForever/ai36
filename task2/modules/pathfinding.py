@@ -1,80 +1,62 @@
-import heapq
-from .common import Direction, manhattan_dst
-from .components import *
-from .systems import MoveAndTeleportSystem
+from heapq import heappop, heappush
+from .game import Game
 
 
 class Pathfinder:
-    def __init__(self, game):
-        self.game = game
+    def __init__(self, src: Game):
+        self.src = src
 
-    def get_moves(self, x: int, y: int, ghost_turns: int) -> list[Direction, tuple[int, int], int]:
-        moves: list[Direction, tuple[int, int], int] = []
+    def estimate(self, game: Game) -> int:
+        nodes = list(game.pearls) + list(game.gems) + [game.player]
 
-        for direction in Direction:
-            dx, dy = direction.value
-            new_x, new_y, ghost_turns = MoveAndTeleportSystem.get_next_pos(
-                self.game, x, y, dx, dy, ghost_turns, self.game.get_player().get(GhostComp).max_turns
-            )
-
-            if (new_x, new_y) != (x, y):
-                moves.append((direction, (new_x, new_y), ghost_turns))
-
-        return moves
-    
-    def find(self) -> list[str]:
-        player = self.game.get_player()
-        player_pos = player.get(PosComp)
-
-        x, y = player_pos.x, player_pos.y
-        pearls = [
-            (pearl.get(PosComp).x, pearl.get(PosComp).y)
-            for pearl in self.game.entities.get_by_name("pearl")
-        ]
-        full_path = []
-
-        while pearls:
-            path, x, y, pearls = self._find(x, y, pearls)
-            full_path.extend(path)
-
-        return full_path
-
-    def _find(self, x: int, y: int, pearls: list[tuple[int, int]]) -> list[str]:
-        frontier = [(
-            self.estimate(x, y, pearls),
-            0,
-            (x, y),
-            0,
-            []
-        )]
+        if not nodes:
+            return 0
+        
+        mst_cost = 0
         visited = set()
+        min_heap = [(0, nodes[0])]
 
-        while frontier:
-            f_cost, g_cost, (x, y), ghost_turns, path = heapq.heappop(frontier)
+        while min_heap and len(visited) < len(nodes):
+            cost, (x, y) = heappop(min_heap)
 
             if (x, y) in visited:
                 continue
             visited.add((x, y))
 
-            if (x, y) in pearls:
-                return path, x, y, [pearl for pearl in pearls if pearl != (x, y)]
-                
-            for direction, (new_x, new_y), new_ghost_turn in self.get_moves(x, y, ghost_turns):
-                if (new_x, new_y) in visited:
+            mst_cost += cost
+
+            for nx, ny in nodes:
+                if (nx, ny) in visited:
                     continue
+
+                heappush(min_heap, (abs(nx - x) + abs(ny - y), (nx, ny)))
+
+        return mst_cost
+
+    def find(self) -> list[str]:
+        frontier = [(self.estimate(self.src), 0, self.src.player, self.src.pearls, self.src.gems, self.src.ghost_turns, [])]
+        visited = set()
+
+        while frontier:
+            _, g_cost, player, pearls, gems, ghost_turns, path = heappop(frontier)
+            game = Game(self.src.w, self.src.h, player, pearls, gems, self.src.walls, ghost_turns)
+
+            if hash(game) in visited:
+                continue
+            visited.add(hash(game))
+
+            if not game.pearls:
+                return path
             
-                heapq.heappush(frontier, (
-                    g_cost + self.estimate(new_x, new_y, pearls) + 1,
-                    g_cost + 1,
-                    (new_x, new_y),
-                    new_ghost_turn,
-                    path + [direction.name]
-                ))
+            for direction, new_pos in game.get_moves().items():
+                new_game = game.move_to(new_pos)
+                new_g_cost = g_cost + 1
+                new_f_cost = new_g_cost + self.estimate(new_game)
+                new_path = path + [direction]
 
-        return [], x, y, pearls
+                if hash(new_game) in visited:
+                    continue
+                
+                heappush(frontier, (new_f_cost, new_g_cost, new_game.player, new_game.pearls, new_game.gems, new_game.ghost_turns, new_path))
 
-    def estimate(self, x: int, y: int, pearls: list[tuple[int, int]]) -> float:
-        if not pearls:
-            return 0
-        
-        return min(manhattan_dst(x, y, *pearl) for pearl in pearls)
+        return []
