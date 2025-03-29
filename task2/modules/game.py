@@ -1,239 +1,91 @@
-import pygame
-from pygame.locals import *
-import time
-from typing import Self
-from .common import Direction
-from .entities import Entity, EntityCollection
-from .components import *
-from .systems import *
-from .pathfinding import Pathfinder
+Pos = tuple[int, int]
 
-TILE_SIZE = 64
-WINDOW_WIDTH, WINDOW_HEIGHT = 1280, 720
+directions = {
+    "LEFT": (-1, 0),
+    "RIGHT": (1, 0),
+    "TOP": (0, -1),
+    "BOTTOM": (0, 1)
+}
 
 
 class Game:
-    def __init__(self, title: str, width: int, height: int):
-        pygame.init()
-        pygame.display.set_caption(title)
-
-        self.width = width
-        self.height = height
-
-        self.screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT))
-        self.surface = pygame.Surface((width * TILE_SIZE, height * TILE_SIZE))
-
-        self.clock = pygame.time.Clock()
-        self.is_running = True
-        self.is_paused = True
-
-        self.texture_atlas = pygame.image.load("assets/texture_atlas.png").convert_alpha()
-
-        self.entities = EntityCollection()
-
-        self.move_and_teleport_system = MoveAndTeleportSystem(self)
-        self.consume_system = ConsumeSystem(self)
-
-        self.delta_time = 0
-
-        self.score = 0
-        self.path_taken = 0
-
-        self.path: list[str] = None
-
-        self.banner_text = "Press [SPACE] to start!"
-        self.banner_visible = True
-
-    def handle_input(self):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.is_running = False
-
-            if event.type == pygame.KEYDOWN and event.key == K_SPACE and not self.is_winning():
-                self.is_paused = False
-                self.hide_banner()
-    
-    def update(self):
-        if self.path_taken < len(self.path):
-            if self.delta_time >= .1:
-                direction = self.get_player().get(DirectionComp)
-                direction.dx, direction.dy = Direction[self.path[self.path_taken]].value
-
-                self.move_and_teleport_system.update()
-                self.score += self.consume_system.update()
-                
-                self.delta_time = 0
-                self.path_taken += 1
-        
-        if self.is_winning():
-            self.is_paused = True
-            self.show_banner("All pearls found!")
-
-    def get_player(self) -> Entity:
-        return self.entities.get_by_name("player")[0]
-
-    def is_winning(self) -> bool:
-        return not any(self.entities.get_by_name("pearl"))
-    
-    def is_losing(self) -> bool:
-        player_pos = self.get_player().get(PosComp)
-
-        if not self.is_ghosting:
-            for obstacle in self.entities.get_by_comp(ObstacleComp):
-                obstacle_pos = obstacle.get(PosComp)
-
-                if (obstacle_pos.x, obstacle_pos.y) == (player_pos.x, player_pos.y):
-                    return True
-                
-        return False
-
-    def render(self):
-        self.screen.fill(pygame.Color("black"))
-        self.surface.fill(pygame.Color("steelblue"))
-
-        ghost_turns = self.get_player().get(GhostComp).turns
-
-        for entity in self.entities.get_all():
-            pos = entity.get(PosComp)
-            sprite = entity.get(SpriteComp).sprite
-
-            if entity.has(DirectionComp):
-                direction = entity.get(DirectionComp)
-                sprite = pygame.transform.rotate(
-                    pygame.transform.flip(sprite, direction.dx == 1, False),
-                    90 * direction.dy
-                )
-
-            if entity.has(ObstacleComp):
-                sprite.set_alpha(
-                    128 if entity.get(ObstacleComp).ghostable
-                        and ghost_turns > 0
-                    else 255
-                )
-            
-            self.surface.blit(sprite, (pos.x * TILE_SIZE, pos.y * TILE_SIZE))
-
-        scaled_surface = pygame.transform.smoothscale_by(self.surface,
-            WINDOW_WIDTH / (self.width * TILE_SIZE)
-        )
-
-        self.screen.blit(scaled_surface, (0, WINDOW_HEIGHT - scaled_surface.get_size()[1]))
-
-        hud_font = pygame.font.SysFont("monospace", 24, bold=True)
-        hud_info = " | ".join(filter(None, [
-            f"Score: {self.score}",
-            f"Path taken: {self.path_taken}",
-            f"POWER UP ({ghost_turns})!" if ghost_turns > 0 else None
-        ]))
-
-        hud = hud_font.render(hud_info, True, pygame.Color("white"))
-
-        self.screen.blit(hud, (
-            (WINDOW_WIDTH - hud.get_size()[0]) / 2,
-            (WINDOW_HEIGHT - scaled_surface.get_size()[1] - hud.get_size()[1]) / 2
-        ))
-
-        if self.banner_visible:
-            banner_font = pygame.font.SysFont("monospace", 48, bold=True)
-            banner = banner_font.render(self.banner_text, True, pygame.Color("white"))
-
-            banner_surface = pygame.Surface(banner.get_size(), pygame.SRCALPHA)
-            banner_surface.fill((0, 0, 0, 128))
-            banner_surface.blit(banner, (0, 0))
-            
-            self.screen.blit(banner_surface, (
-                (WINDOW_WIDTH - banner_surface.get_size()[0]) / 2,
-                250
-            ))
-
-        pygame.display.flip()
-
-    def show_banner(self, text: str = None):
-        if text is not None:
-            self.banner_text = text
-
-        self.banner_visible = True
-
-    def hide_banner(self):
-        self.banner_visible = False
-
-    def run(self, path: list[str]):
-        self.path = path
-
-        while self.is_running:
-            self.delta_time += self.clock.tick(60) / 1000
-
-            self.handle_input()
-
-            if not self.is_paused:
-                self.update()
-            
-            self.render()
+    def __init__(self, w: int, h: int, player: Pos, pearls: set[Pos], gems: set[Pos], walls: set[Pos], ghost_turns: int = 0):
+        self.w, self.h = w, h
+        self.player = player
+        self.pearls = pearls
+        self.gems = gems
+        self.walls = walls
+        self.ghost_turns = ghost_turns
+        self.portals = [(1, 1), (self.w - 2, 1), (self.w - 2, self.h - 2), (1, self.h - 2)]
 
     @classmethod
-    def load_from_map(cls, title: str, map_data: str) -> Self:
-        map_data = map_data.split("\n")
-
-        game = cls(title, len(map_data[0]), len(map_data))
-
-        portals = [
-            (1, 1),
-            (game.width - 2, 1),
-            (game.width - 2, game.height - 2),
-            (1, game.height - 2)
-        ]
-
-        for i, pos in enumerate(portals):
-            game.entities.add("portal", *pos, [
-                SpriteComp(game.texture_atlas, 1, 0, TILE_SIZE),
-                TeleportableComp(*portals[(i + 2) % 4])
-            ])
-
-        for y, row in enumerate(map_data):
+    def load_map(cls, map_str: str) -> "Game":
+        lines = map_str.strip().splitlines()
+        w, h = len(lines[0]), len(lines)
+        pearls, gems, walls = set(), set(), set()
+        player = None
+        
+        for y, row in enumerate(lines):
             for x, char in enumerate(row):
-                if char != " ":
-                    name: str
-                    sprite_pos: tuple[int, int]
-                    comps: list[Comp]
+                pos = (x, y)
+                match (char):
+                    case "P": player = pos
+                    case ".": pearls.add(pos)
+                    case "O": gems.add(pos)
+                    case "%": walls.add(pos)
 
-                    match (char):
-                        case "%":
-                            is_inside = x == 0 or x == game.width - 1 \
-                                        or y == 0 or y == game.height - 1
+        return cls(w, h, player, pearls, gems, walls)
+    
+    def get_moves(self) -> dict[str, Pos]:
+        x, y = self.player
+        moves = {}
 
-                            name = "wall"
-                            sprite_pos = 0, 0
-                            comps = [ObstacleComp(ghostable=not is_inside)]
+        for direction, (dx, dy) in directions.items():
+            nx, ny = x + dx, y + dy
+            new_pos = nx, ny
 
-                        case "P":
-                            name = "player"
-                            sprite_pos = 2, 0
-                            comps = [
-                                DirectionComp(*Direction.LEFT.value),
-                                GhostComp(5),
-                                ConsumerComp()
-                            ]
+            if not (0 <= nx < self.w and 0 <= ny < self.h):
+                continue
+            if new_pos in self.walls and self.ghost_turns == 0:
+                continue
 
-                        case ".":
-                            name = "pearl"
-                            sprite_pos = 0, 1
-                            comps = [ConsumableComp(10)]
+            if new_pos in self.portals:
+                new_pos = self.portals[(self.portals.index(new_pos) + 2) % 4]
 
-                        case "O":
-                            name = "gem"
-                            sprite_pos = 1, 1
-                            comps = [
-                                ConsumableComp(100),
-                                PowerUpComp()
-                            ]
+            moves[direction] = new_pos
 
-                    game.entities.add(name, x, y, [
-                        SpriteComp(game.texture_atlas, *sprite_pos, TILE_SIZE),
-                        *comps
-                    ])
+        return moves
+    
+    def move_to(self, new_pos: Pos) -> "Game":
+        if new_pos == self.player:
+            return self
+        
+        pearls = self.pearls.copy()
+        gems = self.gems.copy()
+        ghost_turns = max(self.ghost_turns - 1, 0)
 
-        game.entities._sort()
+        if new_pos in pearls:
+            pearls.remove(new_pos)
+        if new_pos in gems:
+            ghost_turns = 5
+            gems.remove(new_pos)
 
-        game.pathfinder = Pathfinder(game)
+        return Game(self.w, self.h, new_pos, pearls, gems, self.walls, ghost_turns)
+    
+    def __hash__(self) -> int:
+        return hash((self.player, frozenset(self.pearls), frozenset(self.gems), self.ghost_turns))
 
-        return game
+    def __str__(self) -> str:
+        grid = [[" " for _ in range(self.w)] for _ in range(self.h)]
+
+        for x, y in self.walls:
+            grid[y][x] = "%"
+        for x, y in self.pearls:
+            grid[y][x] = "."
+        for x, y in self.gems:
+            grid[y][x] = "O"
+
+        px, py = self.player
+        grid[py][px] = "P"
+
+        return "\n".join("".join(row) for row in grid)
