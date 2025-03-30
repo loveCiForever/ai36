@@ -1,3 +1,4 @@
+from itertools import groupby
 from heapq import heappop, heappush
 from .game import Game
 
@@ -60,3 +61,7 @@ class Pathfinder:
                 heappush(frontier, (new_f_cost, new_g_cost, new_game.player, new_game.pearls, new_game.gems, new_game.ghost_turns, new_path))
 
         return []
+    
+
+def compress_path(path: list[str]) -> str:
+    return " ".join(f"{direction[0]}{len(list(group))}" for direction, group in groupby(path))

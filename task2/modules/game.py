@@ -1,10 +1,10 @@
 Pos = tuple[int, int]
 
 directions = {
-    "LEFT": (-1, 0),
-    "RIGHT": (1, 0),
-    "TOP": (0, -1),
-    "BOTTOM": (0, 1)
+    "WEST": (-1, 0),
+    "EAST": (1, 0),
+    "NORTH": (0, -1),
+    "SOUTH": (0, 1)
 }
 
 

@@ -1,5 +1,7 @@
 import time
-from modules import Game, Pathfinder, Renderer
+from modules import Game, Pathfinder, Renderer, compress_path
+
+TITLE = "Wilbur's Wavy Waters v2.0"
 
 
 def main():
@@ -19,7 +21,9 @@ def main():
             f"\nTotal cost: {len(path)}"
         )
 
-        renderer = Renderer(game, "pygame window", 1280, 720)
+        print("\nPath:", compress_path(path))
+
+        renderer = Renderer(game, TITLE, 1280, 720)
         renderer.run(path)
 
 

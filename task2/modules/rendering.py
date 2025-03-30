@@ -1,5 +1,5 @@
 import pygame
-from .game import Game, directions
+from .game import Game, Pos, directions
 
 
 class Renderer:
@@ -32,45 +32,65 @@ class Renderer:
 
         self.path_taken = [src.player]
 
+        self.message = "Press [SPACE] to start!"
+        self.is_message_visible = True
+
     def handle_input(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.is_running = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                if len(self.path_taken) == 1:
+                    self.is_paused = False
+                    self.is_message_visible = False
 
-    def draw(self, sprite_name: str, x: int, y: int, alpha: int = 255):
+    def centre_point(self, point: int) -> int:
+        return point * self.tile_size + self.tile_size // 2
+
+    def draw_tile(self, sprite_name: str, x: int, y: int, alpha: int = 255):
         modified_sprite = self.sprites[sprite_name].copy()
         modified_sprite.set_alpha(alpha)
 
         self.surface.blit(modified_sprite, (x * self.tile_size, y * self.tile_size))
-
-    def centre_point(self, point: int) -> int:
-        return point * self.tile_size + self.tile_size // 2
     
-    def display_hud(self, game: Game, scaled_surface_height: int):
+    def draw_hud(self, game: Game, direction: str, scaled_surface_height: int):
         hud_font = pygame.font.SysFont("monospace", 24, bold=True)
 
-        hud_text = f"Path taken: {len(self.path_taken) - 1}"
-        if game.ghost_turns > 0:
-            hud_text += f"    POWER UP ({game.ghost_turns})!"
+        hud_text = f"Path taken: {len(self.path_taken) - 1:<3}   Ghost turns: {game.ghost_turns}   Direction: {direction}"
 
         hud = hud_font.render(hud_text, True, pygame.Color("white"))
         hw, hh = hud.get_size()
 
-        self.screen.blit(hud, ((self.w - hw) // 2, (self.h - scaled_surface_height - hh) // 2))
+        self.screen.blit(hud, (40, (self.h - scaled_surface_height - hh) // 2))
 
-    def render(self, game: Game, direction: str):
+    def draw_message(self):
+        if self.is_message_visible:
+            message_font = pygame.font.SysFont("monospace", 48, bold=True)
+            message_text = message_font.render(self.message, True, pygame.Color("white"))
+
+            message_surface = pygame.Surface(message_text.get_size(), pygame.SRCALPHA)
+            message_surface_width, _ = message_surface.get_size()
+            message_surface.fill((0, 0, 0, 128))
+            message_surface.blit(message_text, (0, 0))
+            
+            self.screen.blit(message_surface, (
+                (self.w - message_surface_width) // 2,
+                550
+            ))
+
+    def render(self, game: Game, direction: Pos, direction_name: str):
         self.screen.fill(pygame.Color("black"))
         self.surface.fill(pygame.Color("steelblue"))
 
         for x, y in game.portals:
-            self.draw("portal", x, y)
+            self.draw_tile("portal", x, y)
         for x, y in game.walls:
             is_boundary = x == 0 or x == game.w - 1 or y == 0 or y == game.h - 1
-            self.draw("wall", x, y, 128 if game.ghost_turns > 0 and not is_boundary else 255)
+            self.draw_tile("wall", x, y, 128 if game.ghost_turns > 0 and not is_boundary else 255)
         for x, y in game.pearls:
-            self.draw("pearl", x, y)
+            self.draw_tile("pearl", x, y)
         for x, y in game.gems:
-            self.draw("gem", x, y)
+            self.draw_tile("gem", x, y)
 
         for i in range(len(self.path_taken) - 1):
             sx, sy = self.path_taken[i]
@@ -79,7 +99,7 @@ class Renderer:
             start_pos = self.centre_point(sx), self.centre_point(sy)
             end_pos = self.centre_point(ex), self.centre_point(ey)
 
-            pygame.draw.line(self.surface, pygame.Color("purple"), start_pos, end_pos, 4)
+            pygame.draw.line(self.surface, pygame.Color("midnightblue"), start_pos, end_pos, 4)
 
         px, py = game.player
         self.surface.blit(
@@ -95,21 +115,28 @@ class Renderer:
 
         self.screen.blit(scaled_surface, (0, self.h - scaled_surface_height))
 
-        self.display_hud(game, scaled_surface_height)
+        self.draw_hud(game, direction_name, scaled_surface_height)
+        self.draw_message()
 
         pygame.display.flip()
 
     def run(self, path: list[str]):
         game = self.src
-        direction = "LEFT"
+        direction = "WEST"
 
         while self.is_running:
             self.clock.tick(self.fps)
             self.handle_input()
-            self.render(game, directions[direction])
+            self.render(game, directions[direction], direction)
 
-            if len(self.path_taken) < len(path) + 1:
-                direction = path[len(self.path_taken) - 1]
-                game = game.move_to(game.get_moves()[direction])
+            if not self.is_paused:
+                if len(self.path_taken) < len(path) + 1:
+                    direction = path[len(self.path_taken) - 1]
+                    game = game.move_to(game.get_moves()[direction])
 
-                self.path_taken.append(game.player)
+                    self.path_taken.append(game.player)
+                else:
+                    self.message = "All pearls collected!"
+                    self.is_message_visible = True
+
+                    self.is_paused = True
