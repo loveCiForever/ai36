@@ -1,8 +1,11 @@
 import pygame
 import sys
-import ast
+import tkinter as tk
+from tkinter import simpledialog
 from pygame.locals import *
 from copy import deepcopy
+import time
+delay = 0.5
 goal_states = [
     [[1, 2, 3],
      [4, 5, 6],
@@ -20,6 +23,7 @@ goal_states = [
      [6, 5, 4],
      [3, 2, 1]]
 ]
+
 class Puzzle:
     def __init__(self, state, action=None, parent=None, g=0, h=0):
         self.state = state
@@ -38,9 +42,6 @@ class Puzzle:
 
     def __lt__(self, other):
         return self.f < other.f
-
-    def __str__(self):
-        return "\n".join("".join(str(e) for e in r) for r in self.state)
 
     @staticmethod
     def get_pos(state, val):
@@ -97,42 +98,22 @@ class Puzzle:
 
         return successors
 
-    def get_id(self):
-        return self.id
-
-    def get_action(self):
-        return self.action
-
-    def get_solution_path(self):
-        path, node = [], self
-        while node.parent:
-            path.append(node.action)
-            node = node.parent
-        return path[::-1]
-
-    def draw(self, dot):
-        label = self.get_id()
-        flat = [x for row in self.state for x in row]
-        tile = lambda x: " " if x == 0 else str(x)
-        table = f'''<
-            <TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0">
-            <TR><TD>{tile(flat[0])}</TD><TD>{tile(flat[1])}</TD><TD>{tile(flat[2])}</TD></TR>
-            <TR><TD>{tile(flat[3])}</TD><TD>{tile(flat[4])}</TD><TD>{tile(flat[5])}</TD></TR>
-            <TR><TD>{tile(flat[6])}</TD><TD>{tile(flat[7])}</TD><TD>{tile(flat[8])}</TD></TR>
-            </TABLE>>'''
-        dot.node(label, table, shape="plaintext")
-        if self.parent:
-            dot.edge(self.parent.get_id(), self.get_id(), label=self.get_action())
 class PuzzleGame:
     def __init__(self, puzzle):
         pygame.init()
         self.puzzle = puzzle
-        self.screen = pygame.display.set_mode((300, 300))
+        self.screen = pygame.display.set_mode((300, 400))
         pygame.display.set_caption('8 Puzzle Game')
         self.font = pygame.font.SysFont(None, 60)
+        self.small_font = pygame.font.SysFont(None, 30)
         self.goal_font = pygame.font.SysFont(None, 40)
         self.running = True
         self.completed = False
+        self.solution = []
+        self.auto_playing = False
+        self.solution_loaded = False
+        self.start_button_rect = pygame.Rect(10, 350, 100, 40)
+        self.import_button_rect = pygame.Rect(10, 320,160, 30)
 
     def draw_board(self):
         self.screen.fill((255, 255, 255))
@@ -145,55 +126,98 @@ class PuzzleGame:
                     text = self.font.render(str(value), True, (0, 0, 0))
                     text_rect = text.get_rect(center=rect.center)
                     self.screen.blit(text, text_rect)
+
+        pygame.draw.rect(self.screen, (200, 200, 200), self.import_button_rect)
+        imp_text = self.small_font.render("Import solution", True, (0, 0, 0))
+        self.screen.blit(imp_text, (15, 325))
+
+        if self.solution_loaded and not self.auto_playing:
+            pygame.draw.rect(self.screen, (100, 200, 100), self.start_button_rect)
+            start_text = self.small_font.render("Start", True, (0, 0, 0))
+            self.screen.blit(start_text, (35,360))
+
         if self.completed:
             msg = self.goal_font.render("Complete", True, (0, 128, 0))
             self.screen.blit(msg, (30, 130))
+
         pygame.display.flip()
 
     def is_goal_state(self):
         return any(self.puzzle.state == goal for goal in goal_states)
 
-    def handle_key(self, key):
-        if self.completed:
+    def import_solution(self):
+        root = tk.Tk()
+        root.withdraw()
+        moves_str = simpledialog.askstring("Solution", "input action list (Ex: 'D','L','U'):")
+        if moves_str:
+            try:
+                self.solution = [s.strip(" '") for s in moves_str.strip().split(',')]
+                self.solution_loaded = True
+            except:
+                print("Error input")
+
+    def auto_play(self):
+        if not self.auto_playing:
             return
-        move_map = {
-            K_LEFT: 'L',
-            K_RIGHT: 'R',
-            K_UP: 'U',
-            K_DOWN: 'D'
-        }
-        if key in move_map:
-            action = move_map[key]
-            for next_puzzle in self.puzzle.get_successors():
-                if next_puzzle.action == action:
-                    self.puzzle = next_puzzle
-                    if self.is_goal_state():
-                        self.completed = True
-                    break
+        if not self.solution:
+            self.auto_playing = False
+            return
+        action = self.solution.pop(0)
+        for next_puzzle in self.puzzle.get_successors():
+            if next_puzzle.action == action:
+                self.puzzle = next_puzzle
+                if self.is_goal_state():
+                    self.completed = True
+                    self.auto_playing = False
+                break
+        time.sleep(delay)
+
+    def handle_mouse(self, pos):
+        if self.import_button_rect.collidepoint(pos):
+            self.import_solution()
+        elif self.start_button_rect.collidepoint(pos) and self.solution_loaded and not self.auto_playing:
+            self.auto_playing = True
 
     def run(self):
         while self.running:
             self.draw_board()
+            self.auto_play()
             for event in pygame.event.get():
                 if event.type == QUIT:
                     self.running = False
+                elif event.type == MOUSEBUTTONDOWN:
+                    self.handle_mouse(event.pos)
                 elif event.type == KEYDOWN:
-                    self.handle_key(event.key)
+                    if not self.completed and not self.auto_playing:
+                        move_map = {
+                            K_LEFT: 'L',
+                            K_RIGHT: 'R',
+                            K_UP: 'U',
+                            K_DOWN: 'D'
+                        }
+                        if event.key in move_map:
+                            action = move_map[event.key]
+                            for next_puzzle in self.puzzle.get_successors():
+                                if next_puzzle.action == action:
+                                    self.puzzle = next_puzzle
+                                    if self.is_goal_state():
+                                        self.completed = True
+                                    break
         pygame.quit()
         sys.exit()
 
 def get_initial_state():
-    print("Import intial state ([[1,2,3],[4,5,6],[7,8,0]]):")
-    while True:
-        try:
-            input_str = input(">>> ")
-            state = ast.literal_eval(input_str)
-            flat = [cell for row in state for cell in row]
-            if isinstance(state, list) and len(state) == 3 and all(len(row) == 3 for row in state) and sorted(flat) == list(range(9)):
-                return state
-        except:
-            pass
-        print("Error")
+    root = tk.Tk()
+    root.withdraw()
+    raw = simpledialog.askstring("Initial State", "Input initial state (ex: 123_45678):")
+    if raw:
+        raw = ''.join(raw.split()).replace('_', '0')
+        if len(raw) == 9 and all(c.isdigit() for c in raw):
+            nums = [int(c) for c in raw]
+            if sorted(nums) == list(range(9)):
+                return [nums[:3], nums[3:6], nums[6:]]
+    print("error input")
+    sys.exit()
 
 if __name__ == '__main__':
     initial_state = get_initial_state()
